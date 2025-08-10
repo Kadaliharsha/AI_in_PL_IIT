@@ -25,6 +25,58 @@ A clean, modern adaptive learning system powered by real ASSISTments educational
 
 3. **Open your browser** and go to `http://localhost:8501`
 
+## 🧠 Model Training (Optional)
+
+This project includes **two training systems**:
+
+### **Basic Training** (`models/train.py`)
+Simple training for two tasks:
+- **interaction**: predict per-interaction correctness (binary)
+- **learner**: predict per-student learner_type (multiclass)
+
+### **Enhanced Training** (`models/enhanced_trainer.py`) ⭐ **RECOMMENDED**
+Comprehensive training system with multiple specialized models:
+
+1. **Learner Classification Model** - Predicts student type (Advanced/Moderate/Struggling)
+2. **Performance Prediction Model** - Predicts success on next question  
+3. **Engagement Analysis Model** - Predicts student engagement level
+
+**Supported models**: MLP, RandomForest, SVM, GradientBoosting
+
+### **Quick Start**
+
+1) **Prepare data** (creates `data/processed/*.csv`):
+```bash
+python data/assistments_processor.py
+```
+
+2) **Train enhanced models** (recommended):
+```bash
+python models/enhanced_trainer.py
+```
+
+3) **Or train basic models**:
+```bash
+# Learner classification
+python models/train.py --task learner --model mlp --epochs 100 --batch-size 32
+
+# Interaction prediction  
+python models/train.py --task interaction --model svm
+```
+
+### **Enhanced Training Features**
+- ✅ **Multiple specialized models** for different learning aspects
+- ✅ **Advanced feature engineering** (consistency, engagement, efficiency)
+- ✅ **Comprehensive evaluation** (accuracy, CV scores, ROC AUC)
+- ✅ **Cross-validation** for robust performance assessment
+- ✅ **Automatic model saving** to `models/artifacts/`
+
+### **Model Artifacts**
+After training, you'll have models like:
+- `learner_classification_mlp.pkl` - Student type prediction
+- `performance_prediction_gb.pkl` - Question success prediction  
+- `engagement_analysis_svm.pkl` - Engagement level analysis
+
 ## 📊 Data Processing
 
 The system uses processed ASSISTments data:

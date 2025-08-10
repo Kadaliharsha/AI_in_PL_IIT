@@ -6,12 +6,18 @@ Clean, simple interface with magenta theme using ASSISTments dataset
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import StandardScaler
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 import os
+import sys
+
+# Add models directory to path
+sys.path.append(os.path.join(os.path.dirname(__file__), 'models'))
+try:
+    from models.model_integration import get_model_manager
+except ImportError:
+    get_model_manager = None
 
 # Page configuration
 st.set_page_config(
@@ -354,7 +360,8 @@ def generate_quiz(question_bank, num_questions=10):
     ]
     
     # Select random questions
-    selected_questions = np.random.choice(math_questions, size=min(num_questions, len(math_questions)), replace=False)
+    selected_questions = np.random.choice(len(math_questions), size=min(num_questions, len(math_questions)), replace=False)
+    selected_questions = [math_questions[i] for i in selected_questions]
     
     # Create quiz format
     quiz = []
@@ -435,7 +442,7 @@ def record_answer(question_index, selected_answer):
         st.rerun()
 
 def analyze_results(data):
-    """Analyze quiz results and create user profile"""
+    """Analyze quiz results and create user profile using AI models"""
     if not st.session_state.quiz_results:
         return
     
@@ -443,8 +450,114 @@ def analyze_results(data):
     
     # Calculate performance metrics
     accuracy = sum(1 for r in results if r['is_correct']) / len(results)
+    total_questions = len(results)
+    correct_answers = sum(1 for r in results if r['is_correct'])
     
-    # Classify learner type
+    # Calculate additional features for AI analysis
+    avg_time_seconds = 60  # Default, could be calculated from actual time data
+    avg_attempts = 1.0     # Default, could be calculated from actual attempt data
+    avg_hints_used = 0.0   # Default
+    consistency = 1 - np.std([r['is_correct'] for r in results]) if len(results) > 1 else 1.0
+    speed_accuracy_tradeoff = accuracy / avg_time_seconds if avg_time_seconds > 0 else 0
+    persistence = avg_attempts / accuracy if accuracy > 0 else 1.0
+    engagement = total_questions * accuracy * (1 / (1 + avg_time_seconds / 60))
+    efficiency = accuracy / avg_attempts if avg_attempts > 0 else accuracy
+    
+    # Prepare student features for AI prediction
+    student_features = {
+        'accuracy': accuracy,
+        'total_questions': total_questions,
+        'avg_time_seconds': avg_time_seconds,
+        'avg_attempts': avg_attempts,
+        'avg_hints_used': avg_hints_used,
+        'consistency': consistency,
+        'speed_accuracy_tradeoff': speed_accuracy_tradeoff,
+        'persistence': persistence,
+        'engagement': engagement,
+        'efficiency': efficiency
+    }
+    
+    # Get AI predictions
+    try:
+        if get_model_manager is None:
+            raise Exception("AI models not available")
+        model_manager = get_model_manager()
+        ai_analysis = model_manager.get_adaptive_recommendations(student_features)
+        
+        if "error" not in ai_analysis:
+            # Use AI prediction
+            ai_learner_type = ai_analysis["learner_type"].title()
+            ai_engagement = ai_analysis["engagement_level"]
+            recommendations = ai_analysis["recommendations"]
+            confidence = ai_analysis["confidence"]
+            
+            # Set color based on AI prediction
+            if ai_learner_type.lower() == "advanced":
+                color = "#4CAF50"
+            elif ai_learner_type.lower() == "moderate":
+                color = "#FF9800"
+            else:
+                color = "#F44336"
+            
+            # Create enhanced user profile
+            st.session_state.user_profile = {
+                'accuracy': accuracy,
+                'learner_type': ai_learner_type,
+                'engagement_level': ai_engagement,
+                'total_questions': total_questions,
+                'correct_answers': correct_answers,
+                'ai_confidence': confidence,
+                'recommendations': recommendations,
+                'difficulty_distribution': {
+                    'easy': len([r for r in results if r['difficulty'] == 'easy']),
+                    'intermediate': len([r for r in results if r['difficulty'] == 'intermediate']),
+                    'hard': len([r for r in results if r['difficulty'] == 'hard'])
+                }
+            }
+            
+            # Show AI-enhanced results
+            st.markdown(f"""
+            <div class="success-card">
+                <h2>🎯 AI-Powered Learning Profile</h2>
+                <h3 style="color: {color};">{ai_learner_type} Learner</h3>
+                <p>Accuracy: {accuracy:.1%} ({correct_answers}/{total_questions} correct)</p>
+                <p>Engagement Level: {ai_engagement.title()}</p>
+                <p>AI Confidence: {confidence['learner']:.1%}</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Show AI recommendations
+            st.markdown("## 🤖 AI Recommendations")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("### 📚 Study Plan")
+                for tip in recommendations["study_plan"]:
+                    st.markdown(f"• {tip}")
+                
+                st.markdown("### 🎯 Difficulty Adjustment")
+                st.info(recommendations["difficulty_adjustment"])
+            
+            with col2:
+                st.markdown("### 💪 Motivation Tips")
+                for tip in recommendations["motivation_tips"]:
+                    st.markdown(f"• {tip}")
+                
+                st.markdown("### 📖 Recommended Resources")
+                for resource in recommendations["resources"]:
+                    st.markdown(f"• {resource}")
+            
+        else:
+            # Fallback to basic analysis
+            st.error(f"AI analysis failed: {ai_analysis['error']}")
+            _show_basic_results(accuracy, correct_answers, total_questions)
+            
+    except Exception as e:
+        st.error(f"Error loading AI models: {str(e)}")
+        _show_basic_results(accuracy, correct_answers, total_questions)
+
+def _show_basic_results(accuracy, correct_answers, total_questions):
+    """Show basic results when AI analysis fails"""
     if accuracy >= 0.8:
         learner_type = "Advanced"
         color = "#4CAF50"
@@ -455,25 +568,11 @@ def analyze_results(data):
         learner_type = "Struggling"
         color = "#F44336"
     
-    # Create user profile
-    st.session_state.user_profile = {
-        'accuracy': accuracy,
-        'learner_type': learner_type,
-        'total_questions': len(results),
-        'correct_answers': sum(1 for r in results if r['is_correct']),
-        'difficulty_distribution': {
-            'easy': len([r for r in results if r['difficulty'] == 'easy']),
-            'intermediate': len([r for r in results if r['difficulty'] == 'intermediate']),
-            'hard': len([r for r in results if r['difficulty'] == 'hard'])
-        }
-    }
-    
-    # Show results
     st.markdown(f"""
     <div class="success-card">
         <h2>🎯 Your Learning Profile</h2>
         <h3 style="color: {color};">{learner_type} Learner</h3>
-        <p>Accuracy: {accuracy:.1%} ({st.session_state.user_profile['correct_answers']}/{len(results)} correct)</p>
+        <p>Accuracy: {accuracy:.1%} ({correct_answers}/{total_questions} correct)</p>
     </div>
     """, unsafe_allow_html=True)
 
