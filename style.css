@@ -1,0 +1,26 @@
+/* MINIMAL CSS - ONLY REMOVE WHITE BARS ABOVE/BELOW QUESTIONS */
+
+/* Remove white bars around radio buttons */
+.stRadio > div > div {
+    background-color: transparent !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.stRadio > div > div > div {
+    background-color: transparent !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Remove white bars above/below questions */
+.question-box > div {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Remove any extra spacing */
+.stRadio + div, .stRadio ~ div {
+    margin: 0 !important;
+    padding: 0 !important;
+}

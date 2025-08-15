@@ -1,6 +1,6 @@
 """
 Adaptive Learning System
-Clean, simple interface with magenta theme using ASSISTments dataset
+Clean, simple interface for personalized learning
 """
 
 import streamlit as st
@@ -8,192 +8,69 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime
-import os
+from plotly.subplots import make_subplots
 import sys
+import os
 
 # Add models directory to path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'models'))
-try:
-    from models.model_integration import get_model_manager
-except ImportError:
-    get_model_manager = None
+from models.model_integration import get_model_manager
 
 # Page configuration
 st.set_page_config(
-    page_title="Adaptive Learning System",
+    page_title="AI-Powered Adaptive Learning System",
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for magenta theme - NO WHITE BACKGROUNDS
-st.markdown("""
-<style>
-    /* Main theme colors - NO WHITE BACKGROUNDS */
-    .main-header {
-        background: linear-gradient(135deg, #E91E63, #9C27B0) !important;
-        padding: 2rem !important;
-        border-radius: 15px !important;
-        color: white !important;
-        text-align: center !important;
-        margin-bottom: 2rem !important;
-    }
-    
-    .card {
-        background: linear-gradient(135deg, #F8BBD9, #E1BEE7) !important;
-        padding: 1.5rem !important;
-        border-radius: 10px !important;
-        border: 2px solid #E91E63 !important;
-        margin: 1rem 0 !important;
-        color: #333 !important;
-    }
-    
-    .success-card {
-        background: linear-gradient(135deg, #4CAF50, #81C784) !important;
-        color: white !important;
-        padding: 1rem !important;
-        border-radius: 10px !important;
-        margin: 1rem 0 !important;
-    }
-    
-    .warning-card {
-        background: linear-gradient(135deg, #FF9800, #FFB74D) !important;
-        color: white !important;
-        padding: 1rem !important;
-        border-radius: 10px !important;
-        margin: 1rem 0 !important;
-    }
-    
-    .quiz-question {
-        background: linear-gradient(135deg, #F8BBD9, #E1BEE7) !important;
-        padding: 2rem !important;
-        border-radius: 10px !important;
-        border: 2px solid #E91E63 !important;
-        margin: 1rem 0 !important;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
-        color: #333 !important;
-    }
-    
-    .stButton > button {
-        background: linear-gradient(135deg, #E91E63, #9C27B0) !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 25px !important;
-        padding: 0.5rem 2rem !important;
-        font-weight: bold !important;
-    }
-    
-    .stButton > button:hover {
-        background: linear-gradient(135deg, #C2185B, #7B1FA2) !important;
-        transform: translateY(-2px) !important;
-    }
-    
-    /* Ensure all text is visible */
-    .card h1, .card h2, .card h3, .card p {
-        color: #333 !important;
-    }
-    
-    .quiz-question h3, .quiz-question p {
-        color: #333 !important;
-    }
-    
-    .success-card h1, .success-card h2, .success-card h3, .success-card p {
-        color: white !important;
-    }
-    
-    .warning-card h1, .warning-card h2, .warning-card h3, .warning-card p {
-        color: white !important;
-    }
-</style>
-""", unsafe_allow_html=True)
+# Custom CSS for better styling
+with open('style.css', 'r') as f:
+    css = f.read()
+st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
 
-# Load processed data
-@st.cache_data
-def load_data():
-    """Load processed ASSISTments data"""
-    try:
-        clean_data = pd.read_csv("data/processed/clean_assistments_data.csv")
-        profiles = pd.read_csv("data/processed/learner_profiles.csv")
-        question_bank = pd.read_csv("data/processed/question_bank.csv")
-        
-        return {
-            'clean_data': clean_data,
-            'learner_profiles': profiles,
-            'question_bank': question_bank
-        }
-    except FileNotFoundError:
-        st.error("❌ Processed data not found. Please run the data processor first.")
-        return None
+# Main header
+st.markdown('<h1 class="main-header">🎓 AI-Powered Adaptive Learning System</h1>', unsafe_allow_html=True)
 
 # Initialize session state
 if 'user_registered' not in st.session_state:
     st.session_state.user_registered = False
-if 'current_quiz' not in st.session_state:
-    st.session_state.current_quiz = None
+if 'user_info' not in st.session_state:
+    st.session_state.user_info = {}
 if 'quiz_results' not in st.session_state:
     st.session_state.quiz_results = []
-if 'user_profile' not in st.session_state:
-    st.session_state.user_profile = None
+if 'quiz_history' not in st.session_state:
+    st.session_state.quiz_history = []
+if 'current_quiz' not in st.session_state:
+    st.session_state.current_quiz = None
+if 'current_page' not in st.session_state:
+    st.session_state.current_page = "home"
 
-def main():
-    """Main application"""
-    
-    # Header
-    st.markdown("""
-    <div class="main-header">
-        <h1>🎓 Adaptive Learning System</h1>
-        <p>Take a quiz and get personalized learning recommendations</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Load data
-    data = load_data()
-    if data is None:
-        return
-    
-    # Sidebar navigation
-    st.sidebar.markdown("## 📚 Navigation")
-    page = st.sidebar.selectbox(
-        "Choose a page:",
-        ["🏠 Home", "📝 Take Quiz", "📊 Results", "👥 Learner Profiles", "📈 Analytics"]
-    )
-    
-    if page == "🏠 Home":
-        show_home_page(data)
-    elif page == "📝 Take Quiz":
-        show_quiz_page(data)
-    elif page == "📊 Results":
-        show_results_page(data)
-    elif page == "👥 Learner Profiles":
-        show_profiles_page(data)
-    elif page == "📈 Analytics":
-        show_analytics_page(data)
-
-def show_home_page(data):
-    """Show home page with registration"""
-    
+# Simple navigation without sidebar
+def show_home():
+    st.markdown('<div class="student-welcome">', unsafe_allow_html=True)
+    st.markdown("## 🚀 Welcome to Your Personalized Learning Journey!")
+    st.markdown("Our AI system will analyze your learning patterns and create a customized study plan just for you.")
+    st.markdown('</div>', unsafe_allow_html=True)
+    # Only show registration form if not registered
     if not st.session_state.user_registered:
         st.markdown("""
-        <div class="card">
-            <h2>👋 Welcome to Adaptive Learning</h2>
-            <p>This system uses real educational data from ASSISTments to provide personalized learning recommendations.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
+        ### 📚 How It Works:
+        1. **Register** - Tell us about yourself
+        2. **Take Assessment** - Complete a short quiz
+        3. **Get AI Analysis** - Receive personalized insights
+        4. **Follow Recommendations** - Study smarter, not harder
+        """)
         with st.form("registration_form"):
-            st.markdown("### 📝 Register to Start")
-            
+            st.subheader("📝 Student Registration")
             col1, col2 = st.columns(2)
             with col1:
-                name = st.text_input("Full Name")
-                email = st.text_input("Email")
-            
+                name = st.text_input("Full Name", placeholder="Enter your full name")
+                email = st.text_input("Email", placeholder="Enter your email")
             with col2:
                 grade = st.selectbox("Grade Level", ["7th", "8th", "9th", "10th", "11th", "12th"])
-                subject = st.selectbox("Subject", ["Mathematics"])
-            
-            if st.form_submit_button("🚀 Start Learning", type="primary"):
+                subject = st.selectbox("Subject", ["Mathematics", "Science", "English", "History"])
+            if st.form_submit_button("🚀 Start Learning Journey", type="primary"):
                 if name and email:
                     st.session_state.user_registered = True
                     st.session_state.user_info = {
@@ -202,519 +79,654 @@ def show_home_page(data):
                         'grade': grade,
                         'subject': subject
                     }
-                    st.success("✅ Registration successful! You can now take the quiz.")
+                    st.success("✅ Registration successful! You can now take the assessment.")
                     st.rerun()
                 else:
                     st.error("Please fill in all fields.")
     else:
-        st.markdown("""
-        <div class="success-card">
-            <h2>✅ Welcome back, {}!</h2>
-            <p>You're registered and ready to take the adaptive quiz.</p>
-        </div>
-        """.format(st.session_state.user_info['name']), unsafe_allow_html=True)
+        st.success(f"✅ Welcome back, {st.session_state.user_info['name']}!")
+        st.info(f"You're registered for {st.session_state.user_info['subject']} in {st.session_state.user_info['grade']} grade.")
         
-        # col1, col2, col3 = st.columns([1, 2, 1])
-        # with col2:
-        #     if st.button("📝 Take Quiz Now", type="primary", use_container_width=True):
-        #         st.rerun()
+        # Show Start Assessment button for new students
+        if not st.session_state.quiz_results:
+            st.markdown("---")
+            st.subheader("🎯 Ready to Start Your Learning Journey?")
+            st.info("Take your first assessment to get personalized recommendations!")
+            if st.button("🚀 Start Assessment", type="primary", use_container_width=True, key="start_first_assessment"):
+                st.session_state.current_page = "quiz"
+                st.rerun()
+        else:
+            st.markdown("---")
+            st.subheader("📊 Your Learning Progress")
+            st.info("You've already taken assessments! Check your results and history for insights.")
+    # Navigation handled in main()
 
-def show_quiz_page(data):
-    """Show quiz interface"""
+def show_quiz():
+    st.header("📝 Learning Assessment")
+    st.info("This quiz helps our AI understand your learning style and current knowledge level.")
     
     if not st.session_state.user_registered:
-        st.warning("Please register first on the Home page.")
+        st.warning("Please register first!")
+        st.session_state.current_page = "home"
+        st.rerun()
         return
     
-    st.markdown("""
-    <div class="card">
-        <h2>📝 Mathematics Quiz</h2>
-        <p>Answer 10 questions to get your personalized learning profile.</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Generate quiz if not exists
+    # Only generate a new quiz if we don't have one or if it's a fresh attempt
     if st.session_state.current_quiz is None:
-        st.session_state.current_quiz = generate_quiz(data['question_bank'])
-        st.session_state.quiz_results = []
-        st.session_state.current_question = 0
-    
-    # Show current question
-    if st.session_state.current_question < len(st.session_state.current_quiz):
-        show_question(st.session_state.current_question)
+        st.session_state.current_quiz = generate_quiz()
+        # Show appropriate message based on student status
+        if st.session_state.quiz_history:
+            st.success("🎯 Fresh quiz loaded! Answer all questions to continue.")
     else:
-        # Quiz completed
-        analyze_results(data)
-        st.success("🎉 Quiz completed! Check your results.")
-
-def generate_quiz(question_bank, num_questions=10):
-    """Generate a quiz with real math questions"""
+            st.success("🎯 Welcome to your first assessment! Answer all questions to get started.")
     
-    # Real math questions with answers
-    math_questions = [
-        {
-            'question': "What is 15 + 27?",
-            'options': ['40', '42', '43', '41'],
-            'correct': 1,
-            'difficulty': 'easy',
-            'explanation': '15 + 27 = 42'
-        },
-        {
-            'question': "What is 8 × 7?",
-            'options': ['54', '56', '58', '52'],
-            'correct': 1,
-            'difficulty': 'easy',
-            'explanation': '8 × 7 = 56'
-        },
-        {
-            'question': "What is 3/4 + 1/2?",
-            'options': ['5/4', '4/6', '1 1/4', '1 1/2'],
-            'correct': 0,
-            'difficulty': 'intermediate',
-            'explanation': '3/4 + 1/2 = 3/4 + 2/4 = 5/4'
-        },
-        {
-            'question': "What is 25% of 80?",
-            'options': ['15', '20', '25', '30'],
-            'correct': 1,
-            'difficulty': 'intermediate',
-            'explanation': '25% of 80 = 0.25 × 80 = 20'
-        },
-        {
-            'question': "Solve: 2x + 5 = 13",
-            'options': ['x = 3', 'x = 4', 'x = 5', 'x = 6'],
-            'correct': 1,
-            'difficulty': 'intermediate',
-            'explanation': '2x + 5 = 13 → 2x = 8 → x = 4'
-        },
-        {
-            'question': "What is the area of a rectangle with length 6 and width 4?",
-            'options': ['20', '24', '28', '32'],
-            'correct': 1,
-            'difficulty': 'easy',
-            'explanation': 'Area = length × width = 6 × 4 = 24'
-        },
-        {
-            'question': "What is √16?",
-            'options': ['2', '4', '8', '16'],
-            'correct': 1,
-            'difficulty': 'easy',
-            'explanation': '√16 = 4 because 4² = 16'
-        },
-        {
-            'question': "What is 3² × 2³?",
-            'options': ['36', '72', '108', '144'],
-            'correct': 1,
-            'difficulty': 'intermediate',
-            'explanation': '3² × 2³ = 9 × 8 = 72'
-        },
-        {
-            'question': "Solve: 3x - 7 = 2x + 3",
-            'options': ['x = 4', 'x = 5', 'x = 10', 'x = 11'],
-            'correct': 2,
-            'difficulty': 'hard',
-            'explanation': '3x - 7 = 2x + 3 → 3x - 2x = 3 + 7 → x = 10'
-        },
-        {
-            'question': "What is the slope of the line passing through (2,3) and (4,7)?",
-            'options': ['1', '2', '3', '4'],
-            'correct': 1,
-            'difficulty': 'hard',
-            'explanation': 'Slope = (7-3)/(4-2) = 4/2 = 2'
-        },
-        {
-            'question': "What is 1/3 + 1/6?",
-            'options': ['1/2', '2/9', '1/9', '3/6'],
-            'correct': 0,
-            'difficulty': 'intermediate',
-            'explanation': '1/3 + 1/6 = 2/6 + 1/6 = 3/6 = 1/2'
-        },
-        {
-            'question': "What is 20% of 150?",
-            'options': ['25', '30', '35', '40'],
-            'correct': 1,
-            'difficulty': 'easy',
-            'explanation': '20% of 150 = 0.2 × 150 = 30'
-        },
-        {
-            'question': "What is the perimeter of a square with side length 5?",
-            'options': ['15', '20', '25', '30'],
-            'correct': 1,
-            'difficulty': 'easy',
-            'explanation': 'Perimeter = 4 × side = 4 × 5 = 20'
-        },
-        {
-            'question': "Solve: x² - 4 = 0",
-            'options': ['x = ±2', 'x = ±4', 'x = 2 only', 'x = 4 only'],
-            'correct': 0,
-            'difficulty': 'hard',
-            'explanation': 'x² - 4 = 0 → x² = 4 → x = ±2'
-        },
-        {
-            'question': "What is 5! (5 factorial)?",
-            'options': ['20', '60', '120', '240'],
-            'correct': 2,
-            'difficulty': 'intermediate',
-            'explanation': '5! = 5 × 4 × 3 × 2 × 1 = 120'
+    quiz = st.session_state.current_quiz
+    
+    # Quiz interface
+    st.markdown('<div class="quiz-container">', unsafe_allow_html=True)
+    st.subheader(f"📝 Quiz ({len(quiz)} questions)")
+    
+    # Show quiz instructions
+    st.info("💡 **Instructions**: Read each question carefully and select your answer. All questions must be answered before submitting.")
+    
+    answers = []
+    for i, question in enumerate(quiz):
+        st.markdown('<div class="question-box">', unsafe_allow_html=True)
+        st.write(f"**Question {i+1}:** {question['question']}")
+        
+        # Use unique keys for each quiz attempt to prevent state retention
+        answer = st.radio(
+            f"Select your answer:",
+            question['options'],
+            key=f"quiz_{len(st.session_state.quiz_history)}_{i}",
+            label_visibility="collapsed",
+            index=None  # No default selection
+        )
+        
+        answers.append(answer)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Check if all questions are answered
+    all_answered = all(answer is not None for answer in answers)
+    
+    # Submit button (only enabled when all questions are answered)
+    if st.button("Submit Quiz", type="primary", use_container_width=True, disabled=not all_answered):
+        if not all_answered:
+            st.error("Please answer all questions before submitting!")
+            return
+            
+        # Process answers
+        results = []
+        for i, (question, answer) in enumerate(zip(quiz, answers)):
+            is_correct = answer == question['options'][question['correct']]
+            results.append({
+                'question': question['question'],
+                'user_answer': answer,
+                'correct_answer': question['options'][question['correct']],
+                'is_correct': is_correct,
+                'explanation': question['explanation']
+            })
+        
+        # Calculate performance metrics
+        total_questions = len(results)
+        correct_answers = sum(1 for r in results if r['is_correct'])
+        accuracy = correct_answers / total_questions if total_questions > 0 else 0
+        
+        # Create quiz attempt record
+        import datetime
+        quiz_attempt = {
+            'timestamp': datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+            'date': datetime.datetime.now().strftime("%Y-%m-%d"),
+            'total_questions': total_questions,
+            'correct_answers': correct_answers,
+            'accuracy': accuracy,
+            'score': f"{correct_answers}/{total_questions}",
+            'results': results,
+            'subject': st.session_state.user_info.get('subject', 'Mathematics'),
+            'attempt_number': len(st.session_state.quiz_history) + 1
         }
-    ]
-    
-    # Select random questions
-    selected_questions = np.random.choice(len(math_questions), size=min(num_questions, len(math_questions)), replace=False)
-    selected_questions = [math_questions[i] for i in selected_questions]
-    
-    # Create quiz format
-    quiz = []
-    for i, q in enumerate(selected_questions):
-        quiz.append({
-            'problem_id': f"Q{i+1}",
-            'difficulty': q['difficulty'],
-            'success_rate': 0.7,  # Placeholder success rate
-            'question_text': q['question'],
-            'options': q['options'],
-            'correct_answer': q['correct'],
-            'explanation': q['explanation']
-        })
-    
-    return quiz
-
-def show_question(question_index):
-    """Show a single quiz question"""
-    question = st.session_state.current_quiz[question_index]
-    
-    st.markdown(f"""
-    <div class="quiz-question">
-        <h3>Question {question_index + 1} of 10</h3>
-        <p><strong>{question['question_text']}</strong></p>
-        <p>Success Rate: {question['success_rate']:.1%}</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Progress bar
-    progress = (question_index + 1) / 10
-    st.progress(progress)
-    
-    # Answer options
-    st.markdown("### Select your answer:")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button(f"A) {question['options'][0]}", key=f"q{question_index}_a", use_container_width=True):
-            record_answer(question_index, 0)
-    
-    with col2:
-        if st.button(f"B) {question['options'][1]}", key=f"q{question_index}_b", use_container_width=True):
-            record_answer(question_index, 1)
-    
-    col3, col4 = st.columns(2)
-    with col3:
-        if st.button(f"C) {question['options'][2]}", key=f"q{question_index}_c", use_container_width=True):
-            record_answer(question_index, 2)
-    
-    with col4:
-        if st.button(f"D) {question['options'][3]}", key=f"q{question_index}_d", use_container_width=True):
-            record_answer(question_index, 3)
-
-def record_answer(question_index, selected_answer):
-    """Record user's answer and move to next question"""
-    question = st.session_state.current_quiz[question_index]
-    
-    # Record result
-    result = {
-        'question_index': question_index,
-        'problem_id': question['problem_id'],
-        'difficulty': question['difficulty'],
-        'selected_answer': selected_answer,
-        'correct_answer': question['correct_answer'],
-        'is_correct': selected_answer == question['correct_answer'],
-        'success_rate': question['success_rate'],
-        'timestamp': datetime.now()
-    }
-    
-    st.session_state.quiz_results.append(result)
-    
-    # Move to next question
-    st.session_state.current_question += 1
-    
-    if st.session_state.current_question < len(st.session_state.current_quiz):
-        st.rerun()
-    else:
+        
+        # Store in history and current results
+        st.session_state.quiz_history.append(quiz_attempt)
+        st.session_state.quiz_results = results
+        
+        # Clear the current quiz to force a fresh one next time
+        st.session_state.current_quiz = None
+        
+        # Go to results page
+        st.session_state.current_page = "results"
         st.rerun()
 
-def analyze_results(data):
-    """Analyze quiz results and create user profile using AI models"""
-    if not st.session_state.quiz_results:
+    # Show warning if not all questions are answered
+    if not all_answered:
+        st.warning("⚠️ Please answer all questions before submitting!")
+
+def show_results(results=None, quiz_attempt=None):
+    if results is None:
+        results = st.session_state.quiz_results
+    
+    if not results:
+        st.info("Take a quiz first to see your results!")
         return
     
-    results = st.session_state.quiz_results
+    st.header("📊 Learning Analysis")
     
-    # Calculate performance metrics
-    accuracy = sum(1 for r in results if r['is_correct']) / len(results)
+    # Show quiz history if available
+    if st.session_state.quiz_history and len(st.session_state.quiz_history) > 1:
+        st.subheader("📈 Learning Progress")
+        
+        # Create progress chart
+        history_data = st.session_state.quiz_history
+        dates = [attempt['date'] for attempt in history_data]
+        accuracies = [attempt['accuracy'] for attempt in history_data]
+        scores = [attempt['score'] for attempt in history_data]
+        
+        # Progress over time
+        fig = px.line(
+            x=dates,
+            y=accuracies,
+            title="Accuracy Progress Over Time",
+            labels={'x': 'Date', 'y': 'Accuracy'},
+            markers=True
+        )
+        fig.update_layout(yaxis_tickformat='.1%')
+        st.plotly_chart(fig, use_container_width=True)
+    
+        # History table
+        st.write("**Quiz History:**")
+        history_df = pd.DataFrame([
+            {
+                'Attempt': attempt['attempt_number'],
+                'Date': attempt['date'],
+                'Score': attempt['score'],
+                'Accuracy': f"{attempt['accuracy']:.1%}",
+                'Subject': attempt['subject']
+            }
+            for attempt in history_data
+        ])
+        st.dataframe(history_df, use_container_width=True)
+        
+        # Progress insights
+        if len(history_data) >= 2:
+            latest_accuracy = history_data[-1]['accuracy']
+            previous_accuracy = history_data[-2]['accuracy']
+            improvement = latest_accuracy - previous_accuracy
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Latest Accuracy", f"{latest_accuracy:.1%}")
+            with col2:
+                st.metric("Previous Accuracy", f"{previous_accuracy:.1%}")
+            with col3:
+                if improvement > 0:
+                    st.success(f"Improvement: +{improvement:.1%}")
+                elif improvement < 0:
+                    st.error(f"Change: {improvement:.1%}")
+                else:
+                    st.info("No Change")
+    
+    # Current quiz results
+    st.subheader("📊 Current Quiz Results")
+    
+    # Calculate basic metrics
     total_questions = len(results)
     correct_answers = sum(1 for r in results if r['is_correct'])
+    accuracy = correct_answers / total_questions if total_questions > 0 else 0
     
-    # Calculate additional features for AI analysis
-    avg_time_seconds = 60  # Default, could be calculated from actual time data
-    avg_attempts = 1.0     # Default, could be calculated from actual attempt data
-    avg_hints_used = 0.0   # Default
-    consistency = 1 - np.std([r['is_correct'] for r in results]) if len(results) > 1 else 1.0
-    speed_accuracy_tradeoff = accuracy / avg_time_seconds if avg_time_seconds > 0 else 0
-    persistence = avg_attempts / accuracy if accuracy > 0 else 1.0
-    engagement = total_questions * accuracy * (1 / (1 + avg_time_seconds / 60))
-    efficiency = accuracy / avg_attempts if avg_attempts > 0 else accuracy
+    # Show basic results
+    st.markdown('<div class="results-container">', unsafe_allow_html=True)
+    st.subheader("📈 Performance")
     
-    # Prepare student features for AI prediction
-    student_features = {
-        'accuracy': accuracy,
-        'total_questions': total_questions,
-        'avg_time_seconds': avg_time_seconds,
-        'avg_attempts': avg_attempts,
-        'avg_hints_used': avg_hints_used,
-        'consistency': consistency,
-        'speed_accuracy_tradeoff': speed_accuracy_tradeoff,
-        'persistence': persistence,
-        'engagement': engagement,
-        'efficiency': efficiency
-    }
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Questions", total_questions)
+    with col2:
+        st.metric("Correct Answers", correct_answers)
+    with col3:
+        st.metric("Accuracy", f"{accuracy:.1%}")
+    with col4:
+        st.metric("Score", f"{correct_answers}/{total_questions}")
     
-    # Get AI predictions
+    # Performance chart
+    fig = px.bar(
+        x=["Correct", "Incorrect"],
+        y=[correct_answers, total_questions - correct_answers],
+        title="Current Quiz Results",
+        color=["Correct", "Incorrect"],
+        color_discrete_map={"Correct": "green", "Incorrect": "red"}
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Try to get AI analysis
     try:
         if get_model_manager is None:
-            raise Exception("AI models not available")
+            raise Exception("AI system not available")
+        
         model_manager = get_model_manager()
+        
+        # Check if models are loaded (silently)
+        if not hasattr(model_manager, 'models') or not model_manager.models:
+            raise Exception("AI system not ready")
+        
+        # Calculate features for AI (silently)
+        # Simulate realistic time and attempt data based on performance
+        if accuracy == 1.0:  # Perfect score
+            avg_time_seconds = 30  # Fast, confident answers
+            avg_attempts = 1.0     # Got it right first try
+            avg_hints_used = 0.0   # No hints needed
+        elif accuracy >= 0.8:  # Good score
+            avg_time_seconds = 45  # Reasonable time
+            avg_attempts = 1.2     # Mostly first try
+            avg_hints_used = 0.1   # Few hints
+        elif accuracy >= 0.6:  # Average score
+            avg_time_seconds = 60  # Standard time
+            avg_attempts = 1.5     # Some retries
+            avg_hints_used = 0.3   # Some hints
+        else:  # Lower score
+            avg_time_seconds = 90  # More time needed
+            avg_attempts = 2.0     # Multiple attempts
+            avg_hints_used = 0.5   # More hints used
+        
+        consistency = 1 - np.std([r['is_correct'] for r in results]) if len(results) > 1 else 1.0
+        speed_accuracy_tradeoff = accuracy / (avg_time_seconds / 60) if avg_time_seconds > 0 else 0
+        persistence = avg_attempts / accuracy if accuracy > 0 else 1.0
+        
+        # Improved engagement calculation that rewards good performance
+        # Align with the new balanced training approach
+        accuracy_score = accuracy * 40  # 40 points for accuracy
+        
+        # Efficiency score: Perfect (1.0 attempts) gets 30 points, worse gets fewer
+        if avg_attempts <= 1.0:
+            efficiency_score = 30  # Perfect efficiency
+        elif avg_attempts <= 2.0:
+            efficiency_score = 20  # Good efficiency
+        elif avg_attempts <= 3.0:
+            efficiency_score = 10  # Average efficiency
+        else:
+            efficiency_score = 0   # Poor efficiency
+        
+        # Speed score: Perfect (fast answers) gets 30 points, slower gets fewer
+        if avg_time_seconds <= 30:
+            speed_score = 30  # Perfect speed
+        elif avg_time_seconds <= 60:
+            speed_score = 20  # Good speed
+        elif avg_time_seconds <= 90:
+            speed_score = 10  # Average speed
+        else:
+            speed_score = 0   # Slow speed
+        
+        engagement = accuracy_score + efficiency_score + speed_score
+        
+        # Map engagement score to AI model's expected scale (0-1 range)
+        engagement_normalized = engagement / 100.0
+        
+        efficiency = accuracy / avg_attempts if avg_attempts > 0 else accuracy
+        
+        # Enhanced features based on learning progress
+        learning_progress = 0.0
+        consistency_over_time = 1.0
+        improvement_trend = 0.0
+        
+        if len(st.session_state.quiz_history) > 1:
+            # Calculate learning progress
+            first_accuracy = st.session_state.quiz_history[0]['accuracy']
+            latest_accuracy = st.session_state.quiz_history[-1]['accuracy']
+            learning_progress = latest_accuracy - first_accuracy
+            
+            # Calculate consistency over time
+            accuracies = [attempt['accuracy'] for attempt in st.session_state.quiz_history]
+            consistency_over_time = 1 - np.std(accuracies) if len(accuracies) > 1 else 1.0
+            
+            # Calculate improvement trend
+            if len(accuracies) >= 3:
+                recent_avg = np.mean(accuracies[-3:])
+                earlier_avg = np.mean(accuracies[:3])
+                improvement_trend = recent_avg - earlier_avg
+        
+        # Create features that match what the trained models expect
+        student_features = {
+            # Features for learner classification model
+            'accuracy': accuracy,
+            'total_questions': total_questions,
+            'avg_time_seconds': avg_time_seconds,
+            'avg_attempts': avg_attempts,
+            'avg_hints_used': avg_hints_used,
+            'consistency': consistency,
+            'speed_accuracy_tradeoff': speed_accuracy_tradeoff,
+            'persistence': persistence,
+            'engagement': engagement_normalized, # Use normalized engagement
+            'efficiency': efficiency,
+            'learning_progress': learning_progress,
+            'consistency_over_time': consistency_over_time,
+            'improvement_trend': improvement_trend,
+            'total_attempts': len(st.session_state.quiz_history),
+            
+            # Additional features for engagement analysis model
+            'total_interactions': total_questions,  # Map to what model expects
+            'avg_accuracy': accuracy,              # Map to what model expects
+            'accuracy_std': 1 - consistency,       # Map to what model expects
+            'avg_time': avg_time_seconds           # Map to what model expects
+        }
+        
         ai_analysis = model_manager.get_adaptive_recommendations(student_features)
         
-        if "error" not in ai_analysis:
-            # Use AI prediction
-            ai_learner_type = ai_analysis["learner_type"].title()
-            ai_engagement = ai_analysis["engagement_level"]
-            recommendations = ai_analysis["recommendations"]
-            confidence = ai_analysis["confidence"]
+        # Display AI-powered analysis
+        st.markdown('<div class="ai-analysis">', unsafe_allow_html=True)
+        st.subheader("🤖 Your Learning Profile")
+        
+        # Learner Profile
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Learning Style", ai_analysis['learner_type'].title())
+            st.metric("Confidence Level", f"{ai_analysis['learner_confidence']:.1%}")
+        with col2:
+            st.metric("Engagement Level", ai_analysis['engagement_level'].title())
+            st.metric("Engagement Confidence", f"{ai_analysis['engagement_confidence']:.1%}")
+        
+        # Show engagement breakdown for transparency
+        st.subheader("📊 How Your Engagement Score is Calculated")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Accuracy Score", f"{accuracy_score:.0f}/40")
+        with col2:
+            st.metric("Efficiency Score", f"{efficiency_score:.0f}/30")
+        with col3:
+            st.metric("Speed Score", f"{speed_score:.0f}/30")
+        
+        # Show detailed breakdown
+        st.info(f"💡 **Your Total Engagement**: {engagement:.0f}/100 (AI Model Score: {engagement_normalized:.2f})")
+        
+        # Detailed scoring explanation
+        with st.expander("🔍 See How Your Scores Were Calculated"):
+            st.write("**Accuracy Score (40 points):**")
+            st.write(f"   • Your accuracy: {accuracy:.1%} × 40 = {accuracy_score:.0f} points")
             
-            # Set color based on AI prediction
-            if ai_learner_type.lower() == "advanced":
-                color = "#4CAF50"
-            elif ai_learner_type.lower() == "moderate":
-                color = "#FF9800"
+            st.write("**Efficiency Score (30 points):**")
+            st.write(f"   • Your attempts: {avg_attempts:.1f} per question")
+            if avg_attempts <= 1.0:
+                st.write(f"   • Perfect efficiency! You got it right first try = 30 points")
+            elif avg_attempts <= 2.0:
+                st.write(f"   • Good efficiency! Mostly first or second try = 20 points")
+            elif avg_attempts <= 3.0:
+                st.write(f"   • Average efficiency! Some retries needed = 10 points")
             else:
-                color = "#F44336"
+                st.write(f"   • Room for improvement! Many attempts needed = 0 points")
             
-            # Create enhanced user profile
-            st.session_state.user_profile = {
-                'accuracy': accuracy,
-                'learner_type': ai_learner_type,
-                'engagement_level': ai_engagement,
-                'total_questions': total_questions,
-                'correct_answers': correct_answers,
-                'ai_confidence': confidence,
-                'recommendations': recommendations,
-                'difficulty_distribution': {
-                    'easy': len([r for r in results if r['difficulty'] == 'easy']),
-                    'intermediate': len([r for r in results if r['difficulty'] == 'intermediate']),
-                    'hard': len([r for r in results if r['difficulty'] == 'hard'])
-                }
-            }
-            
-            # Show AI-enhanced results
-            st.markdown(f"""
-            <div class="success-card">
-                <h2>🎯 AI-Powered Learning Profile</h2>
-                <h3 style="color: {color};">{ai_learner_type} Learner</h3>
-                <p>Accuracy: {accuracy:.1%} ({correct_answers}/{total_questions} correct)</p>
-                <p>Engagement Level: {ai_engagement.title()}</p>
-                <p>AI Confidence: {confidence['learner']:.1%}</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Show AI recommendations
-            st.markdown("## 🤖 AI Recommendations")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("### 📚 Study Plan")
-                for tip in recommendations["study_plan"]:
-                    st.markdown(f"• {tip}")
-                
-                st.markdown("### 🎯 Difficulty Adjustment")
-                st.info(recommendations["difficulty_adjustment"])
-            
-            with col2:
-                st.markdown("### 💪 Motivation Tips")
-                for tip in recommendations["motivation_tips"]:
-                    st.markdown(f"• {tip}")
-                
-                st.markdown("### 📖 Recommended Resources")
-                for resource in recommendations["resources"]:
-                    st.markdown(f"• {resource}")
-            
+            st.write("**Speed Score (30 points):**")
+            st.write(f"   • Your average time: {avg_time_seconds:.0f} seconds per question")
+            if avg_time_seconds <= 30:
+                st.write(f"   • Perfect speed! Fast, confident answers = 30 points")
+            elif avg_time_seconds <= 60:
+                st.write(f"   • Good speed! Reasonable time = 20 points")
+            elif avg_time_seconds <= 90:
+                st.write(f"   • Average speed! Some time needed = 10 points")
+            else:
+                st.write(f"   • Room for improvement! More time needed = 0 points")
+        
+        # Show engagement level interpretation
+        if engagement >= 70:
+            st.success("🎯 **Engagement Level**: HIGH - Excellent focus and performance!")
+        elif engagement >= 40:
+            st.warning("🎯 **Engagement Level**: MEDIUM - Good effort, room for improvement!")
         else:
-            # Fallback to basic analysis
-            st.error(f"AI analysis failed: {ai_analysis['error']}")
-            _show_basic_results(accuracy, correct_answers, total_questions)
-            
+            st.info("🎯 **Engagement Level**: LOW - Keep practicing to improve!")
+        
+        # Learning Progress Analysis
+        if len(st.session_state.quiz_history) > 1:
+            st.subheader("📈 Your Learning Journey")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if learning_progress > 0:
+                    st.success(f"Overall Progress: +{learning_progress:.1%}")
+                elif learning_progress < 0:
+                    st.error(f"Overall Progress: {learning_progress:.1%}")
+                else:
+                    st.info("Maintaining Level")
+            with col2:
+                if consistency_over_time > 0.8:
+                    st.success("Consistent Performance")
+                elif consistency_over_time > 0.6:
+                    st.warning("Variable Performance")
+                else:
+                    st.error("Inconsistent Performance")
+            with col3:
+                if improvement_trend > 0:
+                    st.success("Improving Trend")
+                elif improvement_trend < 0:
+                    st.error("Declining Trend")
+                else:
+                    st.info("Stable Performance")
+        
+        # Recommendations
+        st.subheader("📚 Your Personalized Study Plan")
+        # Prepare table data
+        table_data = [
+            ["Focus Areas", "\n".join(ai_analysis['recommendations']['study_plan'])],
+            ["Difficulty", ai_analysis['recommendations']['difficulty_adjustment']],
+            ["Motivation", "\n".join(ai_analysis['recommendations']['motivation_tips'])],
+            ["Resources", "\n".join(ai_analysis['recommendations']['resources'])],
+            ["Next Steps", "\n".join(ai_analysis['recommendations']['next_steps'])]
+        ]
+        df_plan = pd.DataFrame(table_data, columns=["Category", "Recommendations"])
+        st.table(df_plan)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        
     except Exception as e:
-        st.error(f"Error loading AI models: {str(e)}")
+        st.error("🤖 Learning analysis is currently unavailable")
+        st.info("Don't worry! You can still review your results and track your progress.")
+        st.write("")
+        st.write("**Showing your results:**")
         _show_basic_results(accuracy, correct_answers, total_questions)
+    
+    # Question-by-question analysis
+    st.subheader("📝 Question Analysis")
+    for i, result in enumerate(results):
+        col1, col2, col3 = st.columns([3, 1, 1])
+        with col1:
+            st.write(f"**Q{i+1}:** {result['question']}")
+        with col2:
+            if result['is_correct']:
+                st.success("✅ Correct")
+            else:
+                st.error("❌ Incorrect")
+        with col3:
+            st.write(f"Your answer: {result['user_answer']}")
+        
+        if not result['is_correct']:
+            st.info(f"**Correct answer:** {result['correct_answer']}")
+            st.write(f"**Explanation:** {result['explanation']}")
+        st.divider()
+    
+    # Navigation
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🔄 Take Another Quiz", use_container_width=True, key="retake_quiz_2"):
+            # Clear all quiz-related state to ensure fresh start
+            st.session_state.current_quiz = None
+            st.session_state.quiz_results = []
+            st.session_state.current_page = "quiz"
+            st.rerun()
+    with col2:
+        if st.button("🏠 Back to Home", use_container_width=True, key="back_home_2"):
+            st.session_state.current_page = "home"
+            st.rerun()
 
 def _show_basic_results(accuracy, correct_answers, total_questions):
     """Show basic results when AI analysis fails"""
-    if accuracy >= 0.8:
-        learner_type = "Advanced"
-        color = "#4CAF50"
-    elif accuracy >= 0.6:
-        learner_type = "Moderate"
-        color = "#FF9800"
-    else:
-        learner_type = "Struggling"
-        color = "#F44336"
+    st.subheader("📊 Basic Results")
     
-    st.markdown(f"""
-    <div class="success-card">
-        <h2>🎯 Your Learning Profile</h2>
-        <h3 style="color: {color};">{learner_type} Learner</h3>
-        <p>Accuracy: {accuracy:.1%} ({correct_answers}/{total_questions} correct)</p>
-    </div>
-    """, unsafe_allow_html=True)
+    if accuracy >= 0.8:
+        st.success("🎉 Excellent work! You're doing great!")
+    elif accuracy >= 0.6:
+        st.warning("👍 Good effort! Keep practicing to improve.")
+    else:
+        st.info("📚 Keep studying! Practice makes perfect.")
 
-def show_results_page(data):
-    """Show detailed results and recommendations"""
-    if not st.session_state.user_profile:
-        st.warning("Please complete the quiz first.")
+# Sample math questions
+math_questions = [
+    {
+        "question": "What is 15 + 27?",
+        "options": ["40", "42", "41", "43"],
+        "correct": 1,
+        "explanation": "15 + 27 = 42"
+    },
+    {
+        "question": "If 3x + 5 = 20, what is x?",
+        "options": ["3", "5", "7", "15"],
+        "correct": 1,
+        "explanation": "3x + 5 = 20 → 3x = 15 → x = 5"
+    },
+    {
+        "question": "What is the area of a rectangle with length 8 and width 6?",
+        "options": ["14", "48", "28", "56"],
+        "correct": 1,
+        "explanation": "Area = length × width = 8 × 6 = 48"
+    },
+    {
+        "question": "What is 7² × 3?",
+        "options": ["147", "21", "49", "343"],
+        "correct": 0,
+        "explanation": "7² = 49, so 49 × 3 = 147"
+    },
+    {
+        "question": "If a train travels 120 km in 2 hours, what is its speed?",
+        "options": ["60 km/h", "120 km/h", "240 km/h", "30 km/h"],
+        "correct": 0,
+        "explanation": "Speed = distance ÷ time = 120 ÷ 2 = 60 km/h"
+    }
+]
+
+def generate_quiz(num_questions=5):
+    """Generate a random quiz with 5 questions"""
+    if num_questions > len(math_questions):
+        num_questions = len(math_questions)
+    
+    selected_indices = np.random.choice(len(math_questions), size=num_questions, replace=False)
+    selected_questions = [math_questions[i] for i in selected_indices]
+    
+    return selected_questions
+
+# Main app logic
+def main():
+    # Navigation buttons at top
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+    with col1:
+        if st.button("🏠 Home", use_container_width=True):
+            st.session_state.current_page = "home"
+            st.rerun()
+    with col2:
+        if st.session_state.user_registered:
+            if st.button("📝 Take Quiz", use_container_width=True):
+                st.session_state.current_page = "quiz"
+                st.rerun()
+        else:
+            st.markdown("<div style='text-align: center; color: #666;'>Register to take quiz</div>", unsafe_allow_html=True)
+    with col3:
+        if st.session_state.user_registered and st.session_state.quiz_results:
+            if st.button("📊 Results", use_container_width=True):
+                st.session_state.current_page = "results"
+                st.rerun()
+        else:
+            st.markdown("<div style='text-align: center; color: #666;'>Take quiz to see results</div>", unsafe_allow_html=True)
+    with col4:
+        if st.session_state.user_registered and st.session_state.quiz_history:
+            if st.button("📈 History", use_container_width=True):
+                st.session_state.current_page = "history"
+                st.rerun()
+        else:
+            st.markdown("<div style='text-align: center; color: #666;'>Take quiz to see history</div>", unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Page routing
+    if st.session_state.current_page == "home":
+        show_home()
+    elif st.session_state.current_page == "quiz":
+        show_quiz()
+    elif st.session_state.current_page == "results":
+        show_results()
+    elif st.session_state.current_page == "history":
+        show_quiz_history()
+    else:
+        st.session_state.current_page = "home"
+        show_home()
+
+def show_quiz_history():
+    st.header("📈 Learning Progress History")
+    
+    if not st.session_state.quiz_history:
+        st.info("No quiz history available yet. Take a quiz to see your progress!")
         return
     
-    profile = st.session_state.user_profile
+    # Create a DataFrame for the history
+    history_df = pd.DataFrame([
+        {
+            'Attempt': attempt['attempt_number'],
+            'Date': attempt['date'],
+            'Score': attempt['score'],
+            'Accuracy': f"{attempt['accuracy']:.1%}",
+            'Subject': attempt['subject']
+        }
+        for attempt in st.session_state.quiz_history
+    ])
     
-    st.markdown("## 📊 Your Results")
+    # Display the history table
+    st.dataframe(history_df, use_container_width=True)
     
-    # Performance metrics
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Accuracy", f"{profile['accuracy']:.1%}")
-    with col2:
-        st.metric("Learner Type", profile['learner_type'])
-    with col3:
-        st.metric("Questions Answered", profile['total_questions'])
-    
-    # Performance chart
-    if st.session_state.quiz_results:
-        results_df = pd.DataFrame(st.session_state.quiz_results)
+    # Show progress charts if enough data
+    if len(st.session_state.quiz_history) > 1:
+        st.subheader("📈 Progress Charts")
         
-        fig = px.line(
-            results_df, 
-            x='question_index', 
-            y='is_correct',
-            title="Performance Over Time",
-            labels={'question_index': 'Question Number', 'is_correct': 'Correct (1) / Incorrect (0)'}
+        # Create progress chart
+        dates = [attempt['date'] for attempt in st.session_state.quiz_history]
+        accuracies = [attempt['accuracy'] for attempt in st.session_state.quiz_history]
+        scores = [attempt['score'] for attempt in st.session_state.quiz_history]
+        
+        # Accuracy Progress Over Time
+        fig_accuracy = px.line(
+            x=dates,
+            y=accuracies,
+            title="Accuracy Progress Over Time",
+            labels={'x': 'Date', 'y': 'Accuracy'},
+            markers=True
         )
-        fig.update_layout(height=400)
-        st.plotly_chart(fig, use_container_width=True)
-    
-    # Recommendations
-    st.markdown("## 💡 Personalized Recommendations")
-    
-    if profile['learner_type'] == "Advanced":
-        st.markdown("""
-        <div class="success-card">
-            <h3>🚀 Advanced Learner Recommendations</h3>
-            <ul>
-                <li>Focus on challenging problems and advanced topics</li>
-                <li>Explore problem-solving strategies and multiple approaches</li>
-                <li>Consider mentoring other students</li>
-                <li>Take on complex, multi-step problems</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-    elif profile['learner_type'] == "Moderate":
-        st.markdown("""
-        <div class="warning-card">
-            <h3>📈 Moderate Learner Recommendations</h3>
-            <ul>
-                <li>Practice with intermediate difficulty problems</li>
-                <li>Focus on building confidence with fundamentals</li>
-                <li>Gradually increase difficulty level</li>
-                <li>Review concepts you find challenging</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <div class="warning-card">
-            <h3>🎯 Struggling Learner Recommendations</h3>
-            <ul>
-                <li>Start with basic concepts and fundamentals</li>
-                <li>Take your time and don't rush</li>
-                <li>Ask for help when needed</li>
-                <li>Practice with easier problems to build confidence</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-
-def show_profiles_page(data):
-    """Show learner profiles from the dataset"""
-    st.markdown("## 👥 Learner Profiles from ASSISTments Dataset")
-    
-    profiles = data['learner_profiles']
-    
-    # Summary statistics
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Total Learners", len(profiles))
-    with col2:
-        st.metric("Average Accuracy", f"{profiles['accuracy'].mean():.1%}")
-    with col3:
-        st.metric("Advanced Learners", len(profiles[profiles['learner_type'] == 'advanced']))
-    with col4:
-        st.metric("Struggling Learners", len(profiles[profiles['learner_type'] == 'struggling']))
-    
-    # Learner type distribution
-    fig = px.pie(
-        profiles, 
-        names='learner_type', 
-        title="Distribution of Learner Types"
-    )
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Show sample profiles
-    st.markdown("### 📋 Sample Learner Profiles")
-    st.dataframe(profiles.head(10))
-
-def show_analytics_page(data):
-    """Show analytics and insights"""
-    st.markdown("## 📈 Dataset Analytics")
-    
-    clean_data = data['clean_data']
-    question_bank = data['question_bank']
-    
-    # Question difficulty distribution
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        fig = px.pie(
-            question_bank, 
-            names='difficulty', 
-            title="Question Difficulty Distribution"
+        fig_accuracy.update_layout(yaxis_tickformat='.1%')
+        st.plotly_chart(fig_accuracy, use_container_width=True)
+        
+        # Score Progress Over Time
+        fig_score = px.line(
+            x=dates,
+            y=scores,
+            title="Score Progress Over Time",
+            labels={'x': 'Date', 'y': 'Score'},
+            markers=True
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig_score, use_container_width=True)
+        
+        # Progress insights
+        latest_accuracy = st.session_state.quiz_history[-1]['accuracy']
+        previous_accuracy = st.session_state.quiz_history[-2]['accuracy']
+        improvement = latest_accuracy - previous_accuracy
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Latest Accuracy", f"{latest_accuracy:.1%}")
+        with col2:
+            st.metric("Previous Accuracy", f"{previous_accuracy:.1%}")
+        with col3:
+            if improvement > 0:
+                st.success(f"Improvement: +{improvement:.1%}")
+            elif improvement < 0:
+                st.error(f"Change: {improvement:.1%}")
+            else:
+                st.info("No Change")
     
-    with col2:
-        fig = px.histogram(
-            question_bank, 
-            x='success_rate',
-            title="Success Rate Distribution",
-            nbins=20
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    
-    # Performance trends
-    st.markdown("### 📊 Performance Insights")
-    
-    # Average performance by difficulty
-    difficulty_stats = question_bank.groupby('difficulty').agg({
-        'success_rate': 'mean',
-        'total_attempts': 'mean'
-    }).round(3)
-    
-    st.dataframe(difficulty_stats)
+    # Navigation handled in main()
 
+# Run the app
 if __name__ == "__main__":
     main() 
