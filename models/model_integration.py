@@ -284,7 +284,7 @@ class AIModelManager:
             # Analyze engagement
             engagement_level, engagement_confidence, engagement_result = self.analyze_engagement(student_data)
             
-            # Generate recommendations
+            # Generate recommendations (subject-aware)
             recommendations = self._generate_recommendations(learner_type, engagement_level, student_data)
             
             # Calculate total latency
@@ -318,6 +318,7 @@ class AIModelManager:
         """Generate personalized recommendations based on predictions"""
         print(f"🔍 Debug: learner_type='{learner_type}' (type: {type(learner_type)})")
         print(f"🔍 Debug: engagement_level='{engagement_level}' (type: {type(engagement_level)})")
+        subject = (student_data.get('subject') or 'Mathematics').lower()
         
         recommendations = {
             'study_plan': [],
@@ -327,39 +328,80 @@ class AIModelManager:
             'next_steps': []
         }
         
+        # Start with subject-specific base plan/resources
+        subject_bases = {
+            'mathematics': {
+                'study_plan': [
+                    "Review prerequisite skills (fractions, ratios)",
+                    "Practice 10 problems/day with step-by-step solutions",
+                    "Use visual models for new concepts",
+                    "Weekly mixed-topic revision"
+                ],
+                'resources': [
+                    "Khan Academy math topic playlists",
+                    "Interactive fraction/graphing tools",
+                    "NCERT/CBSE chapter summaries"
+                ]
+            },
+            'science': {
+                'study_plan': [
+                    "Skim chapter summary, then read with notes",
+                    "Do concept maps for key processes (e.g., photosynthesis)",
+                    "Answer end-of-chapter questions",
+                    "Short experiment/demo videos to reinforce"
+                ],
+                'resources': [
+                    "CrashCourse Kids / FuseSchool videos",
+                    "Diagram labeling worksheets",
+                    "NCERT exemplar questions"
+                ]
+            },
+            'english': {
+                'study_plan': [
+                    "15 minutes grammar drills (parts of speech, tenses)",
+                    "Read a short passage and write 3-sentence summary",
+                    "Learn 5 new words with usage",
+                    "Weekly writing prompt"
+                ],
+                'resources': [
+                    "British Council grammar practice",
+                    "Reading comprehension passages",
+                    "Vocabulary flashcards"
+                ]
+            },
+            'history': {
+                'study_plan': [
+                    "Timeline the chapter’s events",
+                    "Make cause–effect pairs for key events",
+                    "Answer 5 short questions from the text",
+                    "Revise with a 1-page mind-map"
+                ],
+                'resources': [
+                    "Simple history timelines",
+                    "Chapter summaries with key terms",
+                    "Past-paper short answers"
+                ]
+            }
+        }
+
+        base = subject_bases.get(subject, subject_bases['mathematics'])
+
         # Study plan based on learner type
         if learner_type == 'struggling':
-            recommendations['study_plan'] = [
-                "Focus on foundational concepts",
-                "Practice with easier problems first",
-                "Use hints and explanations",
-                "Review previous material regularly"
-            ]
+            recommendations['study_plan'] = base['study_plan'][:]
+            recommendations['study_plan'][0:0] = ["Start with easier, scaffolded tasks"]
             recommendations['difficulty_adjustment'] = "Start with easier problems and gradually increase difficulty"
         elif learner_type == 'average':
-            recommendations['study_plan'] = [
-                "Balance practice and new concepts",
-                "Mix easy and challenging problems",
-                "Focus on problem-solving strategies",
-                "Regular review and practice"
-            ]
+            recommendations['study_plan'] = base['study_plan'][:]
+            recommendations['study_plan'][0:0] = ["Balance review and new topics"]
             recommendations['difficulty_adjustment'] = "Maintain current difficulty with occasional challenges"
         elif learner_type == 'advanced':
-            recommendations['study_plan'] = [
-                "Tackle challenging problems",
-                "Explore advanced concepts",
-                "Help peers with difficult problems",
-                "Focus on efficiency and speed"
-            ]
+            recommendations['study_plan'] = base['study_plan'][:]
+            recommendations['study_plan'][0:0] = ["Add challenge/extension tasks"]
             recommendations['difficulty_adjustment'] = "Increase difficulty and introduce advanced topics"
         else:
             # Default case
-            recommendations['study_plan'] = [
-                "Focus on core concepts",
-                "Practice regularly",
-                "Seek help when needed",
-                "Track your progress"
-            ]
+            recommendations['study_plan'] = base['study_plan'][:]
             recommendations['difficulty_adjustment'] = "Maintain balanced difficulty"
         
         # Motivation tips based on engagement
@@ -393,30 +435,14 @@ class AIModelManager:
                 "Track your progress"
             ]
         
-        # Resources based on learner type and engagement
-        if learner_type == 'struggling':
-            recommendations['resources'] = [
-                "Basic concept videos",
-                "Step-by-step tutorials",
-                "Practice worksheets",
-                "Online calculators"
-            ]
-        elif learner_type == 'average':
-            recommendations['resources'] = [
-                "Mixed difficulty problems",
-                "Concept explanations",
-                "Practice tests",
-                "Study guides"
-            ]
-        else:  # advanced
-            recommendations['resources'] = [
-                "Advanced problem sets",
-                "Complex concept videos",
-                "Competition problems",
-                "Research papers"
-            ]
+        # Subject-specific resources as base, then refine by level
+        recommendations['resources'] = base['resources'][:]
+        if learner_type == 'advanced':
+            recommendations['resources'] += ["Extension/challenge sets", "Olympiad/contest-style questions"]
+        elif learner_type == 'struggling':
+            recommendations['resources'] += ["Foundational recap sheets", "Guided examples"]
         
-        # Next steps
+        # Next steps (subject-agnostic framing, level-aware)
         if engagement_level == 'low':
             recommendations['next_steps'] = [
                 "Start with 15-minute study sessions",
